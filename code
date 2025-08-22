@@ -125,49 +125,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- SPEED SCRIPT
-local speed = 150
-local humanoid
-local speedEnabled = false
-local speedConnection
-
-local function enforceSpeed()
-    if humanoid and speedEnabled and humanoid.WalkSpeed ~= speed then
-        humanoid.WalkSpeed = speed
-    end
-end
-
-local function onCharacterAdded(character)
-    humanoid = character:WaitForChild("Humanoid")
-    if speedEnabled then
-        humanoid.WalkSpeed = speed
-        speedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(enforceSpeed)
-    end
-end
-
-local function toggleSpeed()
-    speedEnabled = not speedEnabled
-    if humanoid then
-        if speedEnabled then
-            humanoid.WalkSpeed = speed
-            speedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(enforceSpeed)
-        else
-            if speedConnection then
-                speedConnection:Disconnect()
-                speedConnection = nil
-            end
-            humanoid.WalkSpeed = 16
-        end
-    end
-end
-
-UIS.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.Z then
-        toggleSpeed()
-    end
-end)
-
-LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
 if LocalPlayer.Character then
     onCharacterAdded(LocalPlayer.Character)
 end
