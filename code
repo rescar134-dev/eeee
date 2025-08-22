@@ -1,0 +1,173 @@
+local StarterGui = game:GetService("StarterGui")
+
+local function showNotification(title, text, duration)
+    StarterGui:SetCore("SendNotification", {
+        Title = title or "Notification";
+        Text = text or "";
+        Duration = duration or 1;
+    })
+end
+
+showNotification("†", "Made By wmq7.", 2.0)
+
+-- SETTINGS
+getgenv().AimEnabled = true
+getgenv().AimKey = Enum.KeyCode.Q
+getgenv().DisableKey = Enum.KeyCode.P
+getgenv().TeleportKey = Enum.KeyCode.T
+getgenv().PreferredParts = {"Head", "UpperTorso", "HumanoidRootPart"}
+getgenv().AutoPrediction = true
+getgenv().ManualPrediction = 0.125
+getgenv().Smoothness = nil
+
+-- SERVICES
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Camera = workspace.CurrentCamera
+
+local Locked = false
+local Target = nil
+
+-- Get player ping
+local function getPing()
+    local stats = LocalPlayer:GetNetworkPing()
+    return math.clamp(stats, 0.03, 0.3)
+end
+
+-- Get preferred part
+local function getValidPart(char)
+    for _, partName in ipairs(getgenv().PreferredParts) do
+        local part = char:FindFirstChild(partName)
+        if part then return part end
+    end
+    return nil
+end
+
+-- Get closest player to mouse cursor WITHOUT wall check
+local function getClosestToCursor()
+    local closestPlayer = nil
+    local closestDistance = math.huge
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local part = getValidPart(player.Character)
+            if part then -- Removed wall check here
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                    if dist < closestDistance then
+                        closestDistance = dist
+                        closestPlayer = player
+                    end
+                end
+            end
+        end
+    end
+
+    return closestPlayer
+end
+
+-- KEYBINDS
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+
+    if input.KeyCode == getgenv().AimKey then
+        if getgenv().AimEnabled then
+            if Locked then
+                Locked = false
+                Target = nil
+            else
+                local closest = getClosestToCursor()
+                if closest then
+                    Locked = true
+                    Target = closest
+                end
+            end
+        end
+
+    elseif input.KeyCode == getgenv().DisableKey then
+        getgenv().AimEnabled = false
+        Locked = false
+        Target = nil
+
+    elseif input.KeyCode == getgenv().TeleportKey then
+        if getgenv().AimEnabled and Locked and Target and Target.Character then
+            local targetHRP = Target.Character:FindFirstChild("HumanoidRootPart")
+            local localHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+            if targetHRP and localHRP then
+                local backOffset = -targetHRP.CFrame.LookVector * 5
+                local targetPosition = targetHRP.Position + backOffset + Vector3.new(0, 1.5, 0)
+                localHRP.CFrame = CFrame.new(targetPosition, targetHRP.Position)
+            end
+        end
+    end
+end)
+
+-- AIM LOOP WITHOUT WALL CHECK
+RunService.RenderStepped:Connect(function()
+    if getgenv().AimEnabled and Locked and Target and Target.Character then
+        local part = getValidPart(Target.Character)
+        if part then -- Removed wall check here
+            local predictionTime = getgenv().AutoPrediction and getPing() or getgenv().ManualPrediction
+            local predictedPos = part.Position + part.Velocity * predictionTime
+            local aimCFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
+
+            if getgenv().Smoothness == nil then
+                Camera.CFrame = aimCFrame
+            else
+                Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, getgenv().Smoothness)
+            end
+        end
+    end
+end)
+
+-- SPEED SCRIPT
+local speed = 150
+local humanoid
+local speedEnabled = false
+local speedConnection
+
+local function enforceSpeed()
+    if humanoid and speedEnabled and humanoid.WalkSpeed ~= speed then
+        humanoid.WalkSpeed = speed
+    end
+end
+
+local function onCharacterAdded(character)
+    humanoid = character:WaitForChild("Humanoid")
+    if speedEnabled then
+        humanoid.WalkSpeed = speed
+        speedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(enforceSpeed)
+    end
+end
+
+local function toggleSpeed()
+    speedEnabled = not speedEnabled
+    if humanoid then
+        if speedEnabled then
+            humanoid.WalkSpeed = speed
+            speedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(enforceSpeed)
+        else
+            if speedConnection then
+                speedConnection:Disconnect()
+                speedConnection = nil
+            end
+            humanoid.WalkSpeed = 16
+        end
+    end
+end
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.Z then
+        toggleSpeed()
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+if LocalPlayer.Character then
+    onCharacterAdded(LocalPlayer.Character)
+end
